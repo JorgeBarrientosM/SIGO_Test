@@ -23,113 +23,56 @@ namespace BackEnd.Repositories
         //---------------------------------------------------------------------
         public async Task<string> RegistrarOperacionAsync(OperacionRequest request, string usuarioSigo)
         {
-            // Validaciones
-            if (!await ExistsCcoIdAsync(request.CcoId))
-                throw new ArgumentException("Cco_ID especificado no existe.");
+            using var transaction = await BeginTransactionAsync();
 
-            var marea = await GetMareaByIdAsync(request.MareaId);
-            if (marea == null)
-                throw new ArgumentException("Marea_ID especificado no existe.");
-            if (marea.EstadoOperativo != "en Curso")
-                throw new ArgumentException("Marea especificada no está en curso.");
-
-            if (request.OperatividadId == "OP" && (request.Lances == null || request.Lances <= 0))
-                throw new ArgumentException("Lances debe ser > 0 cuando Operatividad_ID es 'OP'.");
-            else if (request.OperatividadId != "OP" && request.Lances != 0)
-                throw new ArgumentException("Lances debe ser 0 cuando OperatividadId no es 'OP'.");
-
-            // Generar Operacion_ID
-            var operacionId = $"OP-{request.CcoId}-{request.Fecha:yyyyMMdd}-V00";
-            if (await ExistsByIdAsync(operacionId))
-                throw new ArgumentException("Operacion_ID ya existe.");
-
-            // Calcular PiezasCarnada
-            var piezasCarnada = 0;
-            if (request.CarnadaId != null)
+            try
             {
-                var carnada = await GetCarnadaByIdAsync(request.CarnadaId);
-                piezasCarnada = (int)(request.ConsumoCarnada * carnada.PiezasKg);
+                await ValidarCcoIdAsync(request.CcoId);
+                await ValidarMareaAsync(request.MareaId);
+                await ValidarOperatividadYLancesAsync(request.OperatividadId, request.Lances);
+
+                var operacionId = await GenerarOperacionIdAsync(request.CcoId, request.Fecha);
+                var piezasCarnada = await CalcularPiezasCarnadaAsync(request.CarnadaId, request.ConsumoCarnada);
+
+                var operacion = CrearEntidadOperacion(request, operacionId, piezasCarnada);
+                await GuardarOperacionAsync(operacion, usuarioSigo);
+
+                await transaction.CommitAsync();
+                return operacion.Operacion_ID;
             }
-
-            // Crear entidad
-            var operacion = new Fac_03_Operacion
+            catch (Exception)
             {
-                Operacion_ID = operacionId,
-                Version = 0,
-                Cco_ID = request.CcoId,
-                Fecha = request.Fecha,
-                Marea_ID = request.MareaId,
-                Operatividad_ID = request.OperatividadId,
-                MillasNauticas = request.MillasNauticas ?? 0,
-                FuerzaViento = request.FuerzaViento ?? 0,
-                Latitud = request.Latitud ?? 0,
-                Longitud = request.Longitud ?? 0,
-                Lances = request.Lances ?? 0,
-                ConsumoPetroleo = request.ConsumoPetroleo ?? 0,
-                Carnada_ID = request.CarnadaId,
-                ConsumoCarnada = request.ConsumoCarnada ?? 0,
-                PiezasCarnada = piezasCarnada,
-                Anzuelos = request.Anzuelos ?? 0,
-                HrsPesca = request.HrsPesca ?? 0,
-                HrsRuta = request.HrsRuta ?? 0,
-                HrsCapa = request.HrsCapa ?? 0,
-                HrsAveria = request.HrsAveria ?? 0,
-                HrsAccidente = request.HrsAccidente ?? 0,
-                HrsPersonal = request.HrsPersonal ?? 0,
-                HrsTotal = 24, // Validado en controlador
-                Sincronizado = "N",
-                Status = "A"
-            };
-
-            await AddAsync(operacion, usuarioSigo); // Usa el método CRUD básico
-            return operacion.Operacion_ID;
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
 
         public async Task<string> ModificarOperacionAsync(OperacionRequest request, string usuarioSigo)
         {
-            var operacionOriginal = await GetOperacionByCcoIdAndFechaAsync(request.CcoId, request.Fecha);
-            if (operacionOriginal == null)
-                throw new ArgumentException("No se encontró la operación OP original.");
+            using var transaction = await BeginTransactionAsync();
 
-            operacionOriginal.Status = "M";
-            await UpdateAsync(operacionOriginal, usuarioSigo);
-
-            // Generar nueva versión
-            var operacionIdBase = $"OP-{request.CcoId}-{request.Fecha:yyyyMMdd}";
-            var nuevaVersion = await GetMaxVersionByOperacionIdBaseAsync(operacionIdBase) + 1;
-            var nuevaOperacionId = $"{operacionIdBase}-V{nuevaVersion:00}";
-
-            var nuevaOperacion = new Fac_03_Operacion
+            try
             {
-                Operacion_ID = nuevaOperacionId,
-                Version = nuevaVersion,
-                Cco_ID = operacionOriginal.Cco_ID,
-                Fecha = operacionOriginal.Fecha,
-                Marea_ID = operacionOriginal.Marea_ID,
-                Operatividad_ID = request.OperatividadId,
-                MillasNauticas = request.MillasNauticas ?? 0,
-                FuerzaViento = request.FuerzaViento ?? 0,
-                Latitud = request.Latitud ?? 0,
-                Longitud = request.Longitud ?? 0,
-                Lances = request.Lances ?? 0,
-                ConsumoPetroleo = request.ConsumoPetroleo ?? 0,
-                Carnada_ID = request.CarnadaId,
-                ConsumoCarnada = request.ConsumoCarnada ?? 0,
-                PiezasCarnada = await CalcularPiezasCarnadaAsync(request.CarnadaId, request.ConsumoCarnada),
-                Anzuelos = request.Anzuelos ?? 0,
-                HrsPesca = request.HrsPesca ?? 0,
-                HrsRuta = request.HrsRuta ?? 0,
-                HrsCapa = request.HrsCapa ?? 0,
-                HrsAveria = request.HrsAveria ?? 0,
-                HrsAccidente = request.HrsAccidente ?? 0,
-                HrsPersonal = request.HrsPersonal ?? 0,
-                HrsTotal = 24,
-                Sincronizado = "N",
-                Status = "A"
-            };
+                var operacionOriginal = await ObtenerOperacionOriginalAsync(request.CcoId, request.Fecha);
+                ValidarOperacionOriginal(operacionOriginal);
 
-            await AddAsync(nuevaOperacion, usuarioSigo);
-            return nuevaOperacion.Operacion_ID;
+                operacionOriginal.Status = "M";
+                await UpdateAsync(operacionOriginal, usuarioSigo);
+
+                var nuevaOperacionId = await GenerarNuevaVersionOperacionIdAsync(request.CcoId, request.Fecha);
+                var piezasCarnada = await CalcularPiezasCarnadaAsync(request.CarnadaId, request.ConsumoCarnada);
+
+                var nuevaOperacion = CrearNuevaEntidadOperacion(request, operacionOriginal, nuevaOperacionId, piezasCarnada);
+                await GuardarNuevaOperacionAsync(nuevaOperacion, usuarioSigo);
+
+                await transaction.CommitAsync();
+                return nuevaOperacion.Operacion_ID;
+            }
+            catch (Exception)
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
 
         //---------------------------------------------------------------------
@@ -190,6 +133,142 @@ namespace BackEnd.Repositories
         //---------------------------------------------------------------------
         // Métodos de Validación
         //---------------------------------------------------------------------
+        private async Task ValidarCcoIdAsync(string ccoId)
+        {
+            if (!await ExistsCcoIdAsync(ccoId))
+                throw new ArgumentException("Cco_ID especificado no existe.");
+        }
+
+        private async Task ValidarMareaAsync(string mareaId)
+        {
+            var marea = await GetMareaByIdAsync(mareaId);
+            if (marea == null)
+                throw new ArgumentException("Marea_ID especificado no existe.");
+            if (marea.EstadoOperativo != "en Curso")
+                throw new ArgumentException("Marea especificada no está en curso.");
+        }
+
+        private async Task ValidarOperatividadYLancesAsync(string operatividadId, int? lances)
+        {
+            if (operatividadId == "OP" && (lances == null || lances <= 0))
+                throw new ArgumentException("Lances debe ser > 0 cuando Operatividad_ID es 'OP'.");
+            else if (operatividadId != "OP" && lances != 0)
+                throw new ArgumentException("Lances debe ser 0 cuando OperatividadId no es 'OP'.");
+        }
+
+        //---------------------------------------------------------------------
+        // Métodos de Soporte
+        //---------------------------------------------------------------------
+        private async Task<string> GenerarOperacionIdAsync(string ccoId, DateTime fecha)
+        {
+            var operacionId = $"OP-{ccoId}-{fecha:yyyyMMdd}-V00";
+            if (await ExistsByIdAsync(operacionId))
+                throw new ArgumentException("Operacion_ID ya existe.");
+            return operacionId;
+        }
+
+        private async Task<string> GenerarNuevaVersionOperacionIdAsync(string ccoId, DateTime fecha)
+        {
+            var operacionIdBase = $"OP-{ccoId}-{fecha:yyyyMMdd}";
+            var nuevaVersion = await GetMaxVersionByOperacionIdBaseAsync(operacionIdBase) + 1;
+            return $"{operacionIdBase}-V{nuevaVersion:00}";
+        }
+
+        private Fac_03_Operacion CrearEntidadOperacion(OperacionRequest request, string operacionId, int piezasCarnada)
+        {
+            return new Fac_03_Operacion
+            {
+                Operacion_ID = operacionId,
+                Version = 0,
+                Cco_ID = request.CcoId,
+                Fecha = request.Fecha,
+                Marea_ID = request.MareaId,
+                Operatividad_ID = request.OperatividadId,
+                MillasNauticas = request.MillasNauticas ?? 0,
+                FuerzaViento = request.FuerzaViento ?? 0,
+                Latitud = request.Latitud ?? 0,
+                Longitud = request.Longitud ?? 0,
+                Lances = request.Lances ?? 0,
+                ConsumoPetroleo = request.ConsumoPetroleo ?? 0,
+                Carnada_ID = request.CarnadaId,
+                ConsumoCarnada = request.ConsumoCarnada ?? 0,
+                PiezasCarnada = piezasCarnada,
+                Anzuelos = request.Anzuelos ?? 0,
+                HrsPesca = request.HrsPesca ?? 0,
+                HrsRuta = request.HrsRuta ?? 0,
+                HrsCapa = request.HrsCapa ?? 0,
+                HrsAveria = request.HrsAveria ?? 0,
+                HrsAccidente = request.HrsAccidente ?? 0,
+                HrsPersonal = request.HrsPersonal ?? 0,
+                HrsTotal = 24,
+                Sincronizado = "N",
+                Status = "A"
+            };
+        }
+
+        private Fac_03_Operacion CrearNuevaEntidadOperacion(OperacionRequest request, Fac_03_Operacion operacionOriginal, string nuevaOperacionId, int piezasCarnada)
+        {
+            return new Fac_03_Operacion
+            {
+                Operacion_ID = nuevaOperacionId,
+                Version = operacionOriginal.Version + 1,
+                Cco_ID = operacionOriginal.Cco_ID,
+                Fecha = operacionOriginal.Fecha,
+                Marea_ID = operacionOriginal.Marea_ID,
+                Operatividad_ID = request.OperatividadId,
+                MillasNauticas = request.MillasNauticas ?? 0,
+                FuerzaViento = request.FuerzaViento ?? 0,
+                Latitud = request.Latitud ?? 0,
+                Longitud = request.Longitud ?? 0,
+                Lances = request.Lances ?? 0,
+                ConsumoPetroleo = request.ConsumoPetroleo ?? 0,
+                Carnada_ID = request.CarnadaId,
+                ConsumoCarnada = request.ConsumoCarnada ?? 0,
+                PiezasCarnada = piezasCarnada,
+                Anzuelos = request.Anzuelos ?? 0,
+                HrsPesca = request.HrsPesca ?? 0,
+                HrsRuta = request.HrsRuta ?? 0,
+                HrsCapa = request.HrsCapa ?? 0,
+                HrsAveria = request.HrsAveria ?? 0,
+                HrsAccidente = request.HrsAccidente ?? 0,
+                HrsPersonal = request.HrsPersonal ?? 0,
+                HrsTotal = 24,
+                Sincronizado = "N",
+                Status = "A"
+            };
+        }
+
+        private async Task GuardarOperacionAsync(Fac_03_Operacion operacion, string usuarioSigo)
+        {
+            await AddAsync(operacion, usuarioSigo);
+        }
+
+        private async Task GuardarNuevaOperacionAsync(Fac_03_Operacion nuevaOperacion, string usuarioSigo)
+        {
+            await AddAsync(nuevaOperacion, usuarioSigo);
+        }
+
+        private async Task<Fac_03_Operacion> ObtenerOperacionOriginalAsync(string ccoId, DateTime fecha)
+        {
+            return await GetOperacionByCcoIdAndFechaAsync(ccoId, fecha);
+        }
+
+        private void ValidarOperacionOriginal(Fac_03_Operacion operacionOriginal)
+        {
+            if (operacionOriginal == null)
+                throw new ArgumentException("No se encontró la operación OP original.");
+        }
+
+        private async Task<int> CalcularPiezasCarnadaAsync(string carnadaId, decimal? consumoCarnada)
+        {
+            if (carnadaId == null || consumoCarnada == null) return 0;
+            var carnada = await GetCarnadaByIdAsync(carnadaId);
+            return (int)(consumoCarnada * carnada.PiezasKg);
+        }
+
+        //---------------------------------------------------------------------
+        // Métodos de Validación (Implementación)
+        //---------------------------------------------------------------------
         public async Task<bool> ExistsCcoIdAsync(string ccoId)
             => await _context.Dim_01_Cco.AnyAsync(c => c.Cco_ID == ccoId);
 
@@ -206,7 +285,7 @@ namespace BackEnd.Repositories
             => await _context.Dim_13_Carnada.FirstOrDefaultAsync(c => c.Carnada_ID == carnadaId);
 
         //---------------------------------------------------------------------
-        // Métodos de Soporte
+        // Métodos de Soporte (Implementación)
         //---------------------------------------------------------------------
         public async Task<Fac_03_Operacion> GetOperacionByCcoIdAndFechaAsync(string ccoId, DateTime fecha)
             => await _context.Fac_03_Operacion
@@ -233,15 +312,5 @@ namespace BackEnd.Repositories
 
         public async Task<IDbContextTransaction> BeginTransactionAsync(IsolationLevel isolationLevel = IsolationLevel.ReadCommitted)
             => await _context.Database.BeginTransactionAsync(isolationLevel);
-
-        //---------------------------------------------------------------------
-        // Métodos Privados
-        //---------------------------------------------------------------------
-        private async Task<int> CalcularPiezasCarnadaAsync(string carnadaId, decimal? consumoCarnada)
-        {
-            if (carnadaId == null || consumoCarnada == null) return 0;
-            var carnada = await GetCarnadaByIdAsync(carnadaId);
-            return (int)(consumoCarnada * carnada.PiezasKg);
-        }
     }
 }

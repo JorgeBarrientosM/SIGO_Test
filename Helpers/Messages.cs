@@ -79,5 +79,10 @@ namespace BackEnd.Constants
         /// Mensaje para contraseña actual incorrecta.
         /// </summary>
         public const string PasswordActual = "Contraseña actual es incorrecta, corrija y vuelva a intentar.";
+
+        /// <summary>
+        /// Mensaje para Error Interno.
+        /// </summary>
+        public const string ErrorInternoServidor = "Error interno del servidor.";
     }
 }

@@ -2,188 +2,277 @@
 using BackEnd.Interfaces;
 using BackEnd.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using System.Data;
 
 namespace BackEnd.Repositories
 {
-    /// <summary>
-    /// Repositorio para la entidad Fac_02_Cuotas.
-    /// </summary>
     public class Fac02Repository : IFac02Repository
     {
         private readonly ApplicationDbContext _context;
         private readonly ILogService _logService;
 
-        /// <summary>
-        /// Inicializa una nueva instancia de la clase <see cref="Fac02Repository"/>.
-        /// </summary>
-        /// <param name="context">El contexto de la base de datos.</param>
-        /// <param name="logService">El servicio de registro de eventos.</param>
         public Fac02Repository(ApplicationDbContext context, ILogService logService)
         {
             _context = context;
             _logService = logService;
         }
 
-        /// <summary>
-        /// Obtiene todos los registros de Fac_02_Cuotas.
-        /// </summary>
-        /// <returns>Una lista de Fac_02_Cuotas.</returns>
+        //---------------------------------------------------------------------
+        // Métodos CRUD Básicos
+        //---------------------------------------------------------------------
         public async Task<List<Fac_02_Cuotas>> GetAllAsync()
-        {
-            return await _context.Fac_02_Cuotas.ToListAsync();
-        }
+            => await _context.Fac_02_Cuotas.ToListAsync();
 
-        /// <summary>
-        /// Obtiene un registro de Fac_02_Cuotas por su ID.
-        /// </summary>
-        /// <param name="id">El ID del registro.</param>
-        /// <returns>El registro de Fac_02_Cuotas.</returns>
         public async Task<Fac_02_Cuotas> GetByIdAsync(string id)
-        {
-            return await _context.Fac_02_Cuotas.FindAsync(id);
-        }
+            => await _context.Fac_02_Cuotas.FindAsync(id);
 
-        /// <summary>
-        /// Agrega un nuevo registro de Fac_02_Cuotas.
-        /// </summary>
-        /// <param name="entity">La entidad a agregar.</param>
-        /// <param name="usuarioSigo">El usuario que realiza la acción.</param>
-        /// <returns>Una tarea que representa la operación asincrónica.</returns>
         public async Task AddAsync(Fac_02_Cuotas entity, string usuarioSigo)
         {
-            using var transaction = await _context.Database.BeginTransactionAsync();
-            try
-            {
-                _context.Fac_02_Cuotas.Add(entity);
-                await _context.SaveChangesAsync();
+            _context.Fac_02_Cuotas.Add(entity);
+            await _context.SaveChangesAsync();
 
-                await _logService.LogEventAsync("Fac_02_Cuotas", "Agrega Registro", $"Agrega: Control_ID = '{entity.Control_ID}'", usuarioSigo, entity);
-
-                await transaction.CommitAsync();
-            }
-            catch (Exception)
-            {
-                await transaction.RollbackAsync();
-                throw;
-            }
+            await _logService.LogEventAsync(
+                "Fac_02_Cuotas",
+                "Agrega Registro",
+                $"Agrega: Control_ID = '{entity.Control_ID}'",
+                usuarioSigo,
+                entity
+            );
         }
 
-        /// <summary>
-        /// Actualiza un registro existente de Fac_02_Cuotas.
-        /// </summary>
-        /// <param name="entity">La entidad a actualizar.</param>
-        /// <param name="usuarioSigo">El usuario que realiza la acción.</param>
-        /// <returns>Una tarea que representa la operación asincrónica.</returns>
         public async Task UpdateAsync(Fac_02_Cuotas entity, string usuarioSigo)
         {
-            using var transaction = await _context.Database.BeginTransactionAsync();
-            try
-            {
-                _context.Entry(entity).State = EntityState.Modified;
-                await _context.SaveChangesAsync();
+            _context.Entry(entity).State = EntityState.Modified;
+            await _context.SaveChangesAsync();
 
-                await _logService.LogEventAsync("Fac_02_Cuotas", "Actualiza Registro", $"Actualiza: Control_ID = '{entity.Control_ID}'", usuarioSigo, entity);
-
-                await transaction.CommitAsync();
-            }
-            catch (Exception)
-            {
-                await transaction.RollbackAsync();
-                throw;
-            }
+            await _logService.LogEventAsync(
+                "Fac_02_Cuotas",
+                "Actualiza Registro",
+                $"Actualiza: Control_ID = '{entity.Control_ID}'",
+                usuarioSigo,
+                entity
+            );
         }
 
-        /// <summary>
-        /// Elimina un registro de Fac_02_Cuotas por su ID.
-        /// </summary>
-        /// <param name="id">El ID del registro.</param>
-        /// <param name="usuarioSigo">El usuario que realiza la acción.</param>
-        /// <returns>Una tarea que representa la operación asincrónica.</returns>
         public async Task DeleteAsync(string id, string usuarioSigo)
         {
-            using var transaction = await _context.Database.BeginTransactionAsync();
-            try
+            var entity = await GetByIdAsync(id);
+            if (entity != null)
             {
-                var entity = await _context.Fac_02_Cuotas.FindAsync(id);
-                if (entity != null)
-                {
-                    _context.Fac_02_Cuotas.Remove(entity);
-                    await _context.SaveChangesAsync();
+                _context.Fac_02_Cuotas.Remove(entity);
+                await _context.SaveChangesAsync();
 
-                    await _logService.LogEventAsync("Fac_02_Cuotas", "Elimina Registro", $"Elimina: Control_ID = '{entity.Control_ID}'", usuarioSigo, entity);
-                }
-
-                await transaction.CommitAsync();
-            }
-            catch (Exception)
-            {
-                await transaction.RollbackAsync();
-                throw;
+                await _logService.LogEventAsync(
+                    "Fac_02_Cuotas",
+                    "Elimina Registro",
+                    $"Elimina: Control_ID = '{entity.Control_ID}'",
+                    usuarioSigo,
+                    entity
+                );
             }
         }
 
-        /// <summary>
-        /// Verifica si un registro de Fac_02_Cuotas existe por su ID.
-        /// </summary>
-        /// <param name="id">El ID del registro.</param>
-        /// <returns>Un valor que indica si el registro existe.</returns>
         public async Task<bool> ExistsByIdAsync(string id)
-        {
-            return await _context.Fac_02_Cuotas.AnyAsync(e => e.Control_ID == id);
-        }
+            => await _context.Fac_02_Cuotas.AnyAsync(e => e.Control_ID == id);
 
-        /// <summary>
-        /// Obtiene el tratamiento de una cuota por su ID.
-        /// </summary>
-        /// <param name="cuotaId">El ID de la cuota.</param>
-        /// <returns>El tratamiento de la cuota.</returns>
+        //---------------------------------------------------------------------
+        // Métodos de Validación
+        //---------------------------------------------------------------------
         public async Task<string> GetTratamientoByCuotaIdAsync(string cuotaId)
-        {
-            return await _context.Dim_11_Cuota
+            => await _context.Dim_11_Cuota
                 .Where(c => c.Cuota_ID == cuotaId)
                 .Select(c => c.Tratamiento)
                 .FirstOrDefaultAsync();
-        }
 
-        /// <summary>
-        /// Obtiene el tipo de una cuota por su ID.
-        /// </summary>
-        /// <param name="cuotaId">El ID de la cuota.</param>
-        /// <returns>El tipo de la cuota.</returns>
         public async Task<string> GetTipoCuotaByCuotaIdAsync(string cuotaId)
-        {
-            return await _context.Dim_11_Cuota
+            => await _context.Dim_11_Cuota
                 .Where(c => c.Cuota_ID == cuotaId)
                 .Select(c => c.TipoCuota)
                 .FirstOrDefaultAsync();
-        }
 
-        /// <summary>
-        /// Verifica si una cuota única existe para una especie y año.
-        /// </summary>
-        /// <param name="cuotaId">El ID de la cuota.</param>
-        /// <param name="especieId">El ID de la especie.</param>
-        /// <param name="año">El año de la cuota.</param>
-        /// <returns>Un valor que indica si la cuota única existe.</returns>
         public async Task<bool> ExistsCuotaUnicaAsync(string cuotaId, string especieId, int año)
-        {
-            return await _context.Fac_02_Cuotas.AnyAsync(c =>
+            => await _context.Fac_02_Cuotas.AnyAsync(c =>
                 c.Cuota_ID == cuotaId && c.Especie_ID == especieId && c.Año == año);
-        }
 
-        /// <summary>
-        /// Obtiene la secuencia máxima de una cuota.
-        /// </summary>
-        /// <param name="cuotaId">El ID de la cuota.</param>
-        /// <param name="especieId">El ID de la especie.</param>
-        /// <param name="zonaId">El ID de la zona.</param>
-        /// <param name="año">El año de la cuota.</param>
-        /// <returns>La secuencia máxima de la cuota.</returns>
+        //---------------------------------------------------------------------
+        // Métodos de Soporte
+        //---------------------------------------------------------------------
         public async Task<int> GetMaxSecuenciaAsync(string cuotaId, string especieId, string zonaId, int año)
-        {
-            return await _context.Fac_02_Cuotas
+            => await _context.Fac_02_Cuotas
                 .Where(c => c.Cuota_ID == cuotaId && c.Especie_ID == especieId && c.Zona_ID == zonaId && c.Año == año)
                 .MaxAsync(c => (int?)c.Secuencia) ?? 0;
+
+        public async Task<IDbContextTransaction> BeginTransactionAsync(IsolationLevel isolationLevel = IsolationLevel.ReadCommitted)
+            => await _context.Database.BeginTransactionAsync(isolationLevel);
+
+        //---------------------------------------------------------------------
+        // Métodos Transaccionales Principales
+        //---------------------------------------------------------------------
+        public async Task<string> AgregarCuotaAsync(AumentaCuotasRequest request, string usuarioSigo)
+        {
+            using var transaction = await BeginTransactionAsync();
+            try
+            {
+                await ValidarCuotaParaAumentoAsync(request.Cuota_ID, request.Especie_ID, request.Año);
+
+                var maxSecuencia = await GetMaxSecuenciaAsync(request.Cuota_ID, request.Especie_ID, request.Zona_ID, request.Año);
+                var nuevaSecuencia = maxSecuencia + 1;
+
+                var cuotaId = $"{request.Cuota_ID}-{request.Especie_ID}-{request.Zona_ID}-{request.Año}-{nuevaSecuencia:D3}";
+
+                var nuevaCuota = new Fac_02_Cuotas
+                {
+                    Control_ID = cuotaId,
+                    Cuota_ID = request.Cuota_ID,
+                    Especie_ID = request.Especie_ID,
+                    Año = request.Año,
+                    Mes = request.Mes,
+                    Toneladas = request.Toneladas,
+                    Zona_ID = request.Zona_ID,
+                    Secuencia = nuevaSecuencia,
+                    Comentario = request.Comentario
+                };
+
+                await AddAsync(nuevaCuota, usuarioSigo);
+                await transaction.CommitAsync();
+
+                return cuotaId;
+            }
+            catch (Exception)
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
+
+        public async Task<string> TraspasarCuotaAsync(RebajaCuotasRequest request, string usuarioSigo)
+        {
+            using var transaction = await BeginTransactionAsync();
+            try
+            {
+                await ValidarCuotaParaRebajaAsync(request.Cuota_ID);
+
+                var maxSecuencia = await GetMaxSecuenciaAsync(request.Cuota_ID, request.Especie_ID, request.Zona_ID, request.Año);
+                var nuevaSecuencia = maxSecuencia + 1;
+
+                var cuotaId = $"{request.Cuota_ID}-{request.Especie_ID}-{request.Zona_ID}-{request.Año}-{nuevaSecuencia:D3}";
+
+                var nuevaCuota = new Fac_02_Cuotas
+                {
+                    Control_ID = cuotaId,
+                    Cuota_ID = request.Cuota_ID,
+                    Especie_ID = request.Especie_ID,
+                    Año = request.Año,
+                    Mes = request.Mes,
+                    Toneladas = -request.Toneladas,
+                    Zona_ID = request.Zona_ID,
+                    Secuencia = nuevaSecuencia,
+                    Comentario = request.Comentario
+                };
+
+                await AddAsync(nuevaCuota, usuarioSigo);
+                await transaction.CommitAsync();
+
+                return cuotaId;
+            }
+            catch (Exception)
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
+
+        public async Task<string> CambiarZonaCuotaAsync(CambioZonaRequest request, string usuarioSigo)
+        {
+            using var transaction = await BeginTransactionAsync();
+            try
+            {
+                await ValidarCuotaParaCambioZonaAsync(request.Cuota_ID);
+
+                var maxSecuenciaOrigen = await GetMaxSecuenciaAsync(request.Cuota_ID, request.Especie_ID, request.ZonaOrigen_ID, request.Año);
+                var nuevaSecuenciaOrigen = maxSecuenciaOrigen + 1;
+
+                var cuotaIdOrigen = $"{request.Cuota_ID}-{request.Especie_ID}-{request.ZonaOrigen_ID}-{request.Año}-{nuevaSecuenciaOrigen:D3}";
+
+                var cuotaOrigen = new Fac_02_Cuotas
+                {
+                    Control_ID = cuotaIdOrigen,
+                    Cuota_ID = request.Cuota_ID,
+                    Especie_ID = request.Especie_ID,
+                    Año = request.Año,
+                    Mes = request.Mes,
+                    Toneladas = -request.Toneladas,
+                    Zona_ID = request.ZonaOrigen_ID,
+                    Secuencia = nuevaSecuenciaOrigen,
+                    Comentario = request.Comentario
+                };
+
+                var maxSecuenciaDestino = await GetMaxSecuenciaAsync(request.Cuota_ID, request.Especie_ID, request.ZonaDestino_ID, request.Año);
+                var nuevaSecuenciaDestino = maxSecuenciaDestino + 1;
+
+                var cuotaIdDestino = $"{request.Cuota_ID}-{request.Especie_ID}-{request.ZonaDestino_ID}-{request.Año}-{nuevaSecuenciaDestino:D3}";
+
+                var cuotaDestino = new Fac_02_Cuotas
+                {
+                    Control_ID = cuotaIdDestino,
+                    Cuota_ID = request.Cuota_ID,
+                    Especie_ID = request.Especie_ID,
+                    Año = request.Año,
+                    Mes = request.Mes,
+                    Toneladas = request.Toneladas,
+                    Zona_ID = request.ZonaDestino_ID,
+                    Secuencia = nuevaSecuenciaDestino,
+                    Comentario = request.Comentario
+                };
+
+                await AddAsync(cuotaOrigen, usuarioSigo);
+                await AddAsync(cuotaDestino, usuarioSigo);
+                await transaction.CommitAsync();
+
+                return $"{cuotaIdOrigen},{cuotaIdDestino}";
+            }
+            catch (Exception)
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
+
+        //---------------------------------------------------------------------
+        // Métodos de Validación (Implementación)
+        //---------------------------------------------------------------------
+        private async Task ValidarCuotaParaAumentoAsync(string cuotaId, string especieId, int año)
+        {
+            var tratamiento = await GetTratamientoByCuotaIdAsync(cuotaId);
+            if (tratamiento != "Aumenta")
+            {
+                throw new ArgumentException("Cuota_ID especificado no corresponde a un movimiento de tipo Aumenta.");
+            }
+
+            var tipoCuota = await GetTipoCuotaByCuotaIdAsync(cuotaId);
+            if (tipoCuota == "Unica" && await ExistsCuotaUnicaAsync(cuotaId, especieId, año))
+            {
+                throw new ArgumentException("Cuota Propia ya existe para esta Especie/Año, favor revisar y reintentar.");
+            }
+        }
+
+        private async Task ValidarCuotaParaRebajaAsync(string cuotaId)
+        {
+            var tratamiento = await GetTratamientoByCuotaIdAsync(cuotaId);
+            if (tratamiento != "Rebaja")
+            {
+                throw new ArgumentException("Cuota_ID especificado no corresponde a un movimiento de tipo Rebaja.");
+            }
+        }
+
+        private async Task ValidarCuotaParaCambioZonaAsync(string cuotaId)
+        {
+            var tratamiento = await GetTratamientoByCuotaIdAsync(cuotaId);
+            if (tratamiento != "Cambio Zona")
+            {
+                throw new ArgumentException("Cuota_ID especificado no corresponde a un movimiento de tipo Cambio Zona.");
+            }
         }
     }
 }

@@ -105,6 +105,11 @@
     public class DescargaRequest
     {
         /// <summary>
+        /// ID del Centro de Costos.
+        /// </summary>
+        public string CcoId { get; set; }
+
+        /// <summary>
         /// ID de la Marea.
         /// </summary>
         public string MareaId { get; set; }
@@ -125,6 +130,11 @@
     /// </summary>
     public class CertificaRequest
     {
+        /// <summary>
+        /// ID del Centro de Costos.
+        /// </summary>
+        public string CcoId { get; set; }
+
         /// <summary>
         /// ID de la Marea.
         /// </summary>
